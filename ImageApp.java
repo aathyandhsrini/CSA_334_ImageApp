@@ -1,256 +1,375 @@
 import java.awt.Color;
 import java.util.Scanner;
 
-/** Image operations for the PLTW 3.3.4 Image App gallery walk. */
-public class ImageApp {
-    private static final String DEFAULT_BACKGROUND = "lib/beach.jpg";
-    private static final String DEFAULT_OVERLAY = "lib2/cat.png";
+/**
+ * ImageApp allows users to change colors, rotate images,
+ * and insert smaller images onto larger images.
+ */
+public class ImageApp
+{
+    /** Runs the ImageApp menu and handles user choices. */
+    public static void main(String[] args)
+    {
+        Scanner input = new Scanner(System.in);
 
-    /** Make an image more red and less green/blue. */
-    public static Pixel[][] changeColor(Pixel[][] source) {
-        return changeColor(source, 40, -20, -20);
-    }
-    /** Add RGB offsets to each pixel; clamp components to 0..255. */
-    public static Pixel[][] changeColor(Pixel[][] source, int redOffset, int greenOffset, int blueOffset) {
-        Pixel[][] result = copyPixels(source);
-        for (int r = 0; r < source.length; r++) {
-            for (int c = 0; c < source[0].length; c++) {
-                Color old = source[r][c].getColor();
-                result[r][c].setColor(new Color(
-                    clamp(old.getRed() + redOffset),
-                    clamp(old.getGreen() + greenOffset),
-                    clamp(old.getBlue() + blueOffset)));
+        // Ask the user which background image to use
+        System.out.print("Enter background filename (example: beach.jpg): ");
+        String filename = input.nextLine();
+
+        // Load the background image from the lib folder
+        Picture image = new Picture("lib/" + filename);
+
+        int choice = -1;
+
+        // Keep displaying the menu until the user exits
+        while (choice != 0)
+        {
+            // Display all available image transformations
+            System.out.println("\n===== IMAGE APP MENU =====");
+            System.out.println("1. Display image");
+            System.out.println("2. Change color");
+            System.out.println("3. Negative image");
+            System.out.println("4. Grayscale");
+            System.out.println("5. Rotate 180 degrees");
+            System.out.println("6. Rotate 90 degrees");
+            System.out.println("7. Rotate -90 degrees");
+            System.out.println("8. Insert image");
+            System.out.println("9. Insert portion of image");
+            System.out.println("10. Reset original image");
+            System.out.println("0. Exit");
+            System.out.print("Enter choice: ");
+
+            // Get the user's menu choice
+            choice = input.nextInt();
+            input.nextLine();
+
+            // Display the current image
+            if (choice == 1)
+            {
+                image.explore();
+            }
+
+            // Change the RGB values of the image
+            else if (choice == 2)
+            {
+                changeColor(image.getPixels2D());
+                image.explore();
+            }
+
+            // Create a photographic negative
+            else if (choice == 3)
+            {
+                negativeColor(image.getPixels2D());
+                image.explore();
+            }
+
+            // Convert the image to grayscale
+            else if (choice == 4)
+            {
+                grayscale(image.getPixels2D());
+                image.explore();
+            }
+
+            // Handle all three rotation options
+            else if (choice >= 5 && choice <= 7)
+            {
+                int angle = 180;
+
+                // Determine the angle based on the user's choice
+                if (choice == 6)
+                {
+                    angle = 90;
+                }
+                else if (choice == 7)
+                {
+                    angle = -90;
+                }
+
+                // Rotate the pixels using matrix multiplication
+                Pixel[][] rotated = rotate(image.getPixels2D(), angle);
+
+                // Create an image with the new dimensions
+                image = new Picture(rotated.length,
+                                    rotated[0].length);
+
+                Pixel[][] pixels = image.getPixels2D();
+
+                // Copy the rotated pixels into the new image
+                for (int row = 0; row < rotated.length; row++)
+                {
+                    for (int col = 0; col < rotated[row].length; col++)
+                    {
+                        pixels[row][col].setColor(
+                            rotated[row][col].getColor());
+                    }
+                }
+
+                // Display the rotated image
+                image.explore();
+            }
+
+            // Insert a full image or a portion of an image
+            else if (choice == 8 || choice == 9)
+            {
+                // Ask which small image to insert
+                System.out.print("Enter small image filename: ");
+                String smallFile = input.nextLine();
+
+                // Load the small image from the lib2 folder
+                Picture smallImage = new Picture("lib2/" + smallFile);
+
+                // Ask where the small image should be placed
+                System.out.print("Enter destination row: ");
+                int row = input.nextInt();
+
+                System.out.print("Enter destination column: ");
+                int col = input.nextInt();
+
+                Pixel[][] small = smallImage.getPixels2D();
+
+                // Insert the entire small image
+                if (choice == 8)
+                {
+                    insert(image.getPixels2D(), small, row, col);
+                }
+
+                // Insert only a selected portion of the small image
+                else
+                {
+                    System.out.print("Enter portion height: ");
+                    int height = input.nextInt();
+
+                    System.out.print("Enter portion width: ");
+                    int width = input.nextInt();
+
+                    insertPortion(image.getPixels2D(), small,
+                                  row, col, height, width);
+                }
+
+                // Display the image after insertion
+                image.explore();
+            }
+
+            // Reset the image back to its original state
+            else if (choice == 10)
+            {
+                image = new Picture("lib/" + filename);
+                image.explore();
+            }
+
+            // Handle invalid menu choices
+            else if (choice != 0)
+            {
+                System.out.println("Invalid choice.");
             }
         }
-        return result;
-    }
-    /** Invert each RGB component: new channel = 255 - old channel. */
-    public static Pixel[][] negativeColor(Pixel[][] source) {
-        Pixel[][] result = copyPixels(source);
-        for (int r = 0; r < source.length; r++) {
-            for (int c = 0; c < source[0].length; c++) {
-                Color old = source[r][c].getColor();
-                result[r][c].setColor(new Color(255 - old.getRed(),
-                    255 - old.getGreen(), 255 - old.getBlue()));
-            }
-        }
-        return result;
-    }
-    /** Luminance-weighted grayscale; all three output components equal. */
-    public static Pixel[][] grayscale(Pixel[][] source) {
-        Pixel[][] result = copyPixels(source);
-        for (int r = 0; r < source.length; r++) {
-            for (int c = 0; c < source[0].length; c++) {
-                Color old = source[r][c].getColor();
-                int gray = clamp((int) Math.round(0.299 * old.getRed()
-                    + 0.587 * old.getGreen() + 0.114 * old.getBlue()));
-                result[r][c].setColor(new Color(gray, gray, gray));
-            }
-        }
-        return result;
-    }
-    /** Rotate using matrix multiplication. Positive angles turn counterclockwise. */
-    public static Pixel[][] rotate(Pixel[][] source, int degrees) {
-        checkPixels(source);
-        Matrix2by2 matrix = Matrix2by2.rotation(degrees);
-        int height = source.length;
-        int width = source[0].length;
-        int angle = ((degrees % 360) + 360) % 360;
 
-        // Quarter turns swap the image's height and width.
-        int newHeight = (angle == 90 || angle == 270) ? width : height;
-        int newWidth = (angle == 90 || angle == 270) ? height : width;
-        Pixel[][] result = new Picture(newHeight, newWidth).getPixels2D();
+        // Close the scanner when the user exits
+        input.close();
+        System.out.println("ImageApp closed.");
+    }
 
-        for (int row = 0; row < height; row++) {
-            for (int col = 0; col < width; col++) {
-                Vector1by2 point = new Vector1by2(row, col);
-                Vector1by2 rotated = Matrix2by2.multiply(point, matrix);
-                int newRow = (int) rotated.getRow();
-                int newCol = (int) rotated.getCol();
-
-                // Move negative coordinates back inside the image.
-                if (angle == 90 || angle == 180) newRow += newHeight - 1;
-                if (angle == 180 || angle == 270) newCol += newWidth - 1;
-                result[newRow][newCol].setColor(source[row][col].getColor());
-            }
-        }
-        return result;
-    }
-    public static Pixel[][] rotate180(Pixel[][] source) { return rotate(source, 180); }
-    public static Pixel[][] rotate90(Pixel[][] source) { return rotate(source, 90); }
-    public static Pixel[][] rotateMinus90(Pixel[][] source) { return rotate(source, -90); }
-
-    /** Paste the entire overlay, including white pixels, at a specified location. */
-    public static Pixel[][] insert(Pixel[][] background, Pixel[][] overlay, int startRow, int startCol) {
-        return insert(background, overlay, startRow, startCol, false, false);
-    }
-    /** Paste with white/transparent background removal. */
-    public static Pixel[][] insertWithoutWhite(Pixel[][] background, Pixel[][] overlay,
-                                               int startRow, int startCol) {
-        return insert(background, overlay, startRow, startCol, true, false);
-    }
-    /** Paste with 50% overlay/background blending, ignoring white/transparent pixels. */
-    public static Pixel[][] insertBlended(Pixel[][] background, Pixel[][] overlay,
-                                          int startRow, int startCol) {
-        return insert(background, overlay, startRow, startCol, true, true);
-    }
     /**
-     * Paste an overlay into a background without changing either source.
-     * If removeWhite is true, near-white and transparent pixels are skipped.
-     * If blend is true, visible pixels are mixed 50/50 with the destination.
+     * Changes the colors of an image from RGB to BRG.
+     * @param pixels the pixels of the image
      */
-    public static Pixel[][] insert(Pixel[][] background, Pixel[][] overlay,
-                                   int startRow, int startCol, boolean removeWhite, boolean blend) {
-        return insertPortion(background, overlay, startRow, startCol,
-            0, 0, overlay.length, overlay[0].length, removeWhite, blend);
-    }
-    /** Paste only a rectangular portion of an overlay (clipped at both image borders). */
-    public static Pixel[][] insertPortion(Pixel[][] background, Pixel[][] overlay,
-                                         int startRow, int startCol, int fromRow, int fromCol,
-                                         int portionHeight, int portionWidth,
-                                         boolean removeWhite, boolean blend) {
-        checkPixels(background);
-        checkPixels(overlay);
-        if (portionHeight < 0 || portionWidth < 0)
-            throw new IllegalArgumentException("Portion dimensions cannot be negative");
-        Pixel[][] output = copyPixels(background);
-        for (int r = 0; r < portionHeight; r++) {
-            int srcRow = fromRow + r, dstRow = startRow + r;
-            if (srcRow < 0 || srcRow >= overlay.length || dstRow < 0 || dstRow >= output.length)
-                continue;
-            for (int c = 0; c < portionWidth; c++) {
-                int srcCol = fromCol + c, dstCol = startCol + c;
-                if (srcCol < 0 || srcCol >= overlay[0].length || dstCol < 0 || dstCol >= output[0].length)
-                    continue;
-                Pixel overlayPixel = overlay[srcRow][srcCol];
-                Color foreground = overlayPixel.getColor();
-                // Transparent PNG pixels and near-white backgrounds are not pasted.
-                if (removeWhite && (overlayPixel.getAlpha() < 20 || isWhite(foreground))) continue;
-                if (blend) {
-                    Color behind = output[dstRow][dstCol].getColor();
-                    foreground = new Color((foreground.getRed() + behind.getRed()) / 2,
-                        (foreground.getGreen() + behind.getGreen()) / 2,
-                        (foreground.getBlue() + behind.getBlue()) / 2);
-                }
-                output[dstRow][dstCol].setColor(foreground);
+    public static void changeColor(Pixel[][] pixels)
+    {
+        // Loop through every pixel in the image
+        for (int row = 0; row < pixels.length; row++)
+        {
+            for (int col = 0; col < pixels[row].length; col++)
+            {
+                Pixel pixel = pixels[row][col];
+
+                // Get the original RGB values
+                int red = pixel.getRed();
+                int green = pixel.getGreen();
+                int blue = pixel.getBlue();
+
+                // Rearrange the RGB values
+                pixel.setColor(new Color(blue, red, green));
             }
         }
-        return output;
     }
-    /** Recolor visible overlay pixels, retaining white/transparent mask pixels. */
-    public static Pixel[][] recolorOverlay(Pixel[][] overlay, Color chosenColor) {
-        Pixel[][] output = copyPixels(overlay);
-        for (int r = 0; r < overlay.length; r++) {
-            for (int c = 0; c < overlay[0].length; c++) {
-                if (overlay[r][c].getAlpha() < 20) {
-                    // Fresh Picture buffers are RGB-only, so encode transparent areas as white.
-                    output[r][c].setColor(Color.WHITE);
-                } else if (!isWhite(overlay[r][c].getColor())) {
-                    output[r][c].setColor(chosenColor);
-                }
+
+    /**
+     * Creates a photographic negative of an image.
+     * @param pixels the pixels of the image
+     */
+    public static void negativeColor(Pixel[][] pixels)
+    {
+        // Loop through every pixel
+        for (int row = 0; row < pixels.length; row++)
+        {
+            for (int col = 0; col < pixels[row].length; col++)
+            {
+                Pixel pixel = pixels[row][col];
+
+                // Get the original color values
+                int red = pixel.getRed();
+                int green = pixel.getGreen();
+                int blue = pixel.getBlue();
+
+                // Invert each color by subtracting it from 255
+                pixel.setColor(new Color(
+                    255 - red, 255 - green, 255 - blue));
             }
         }
-        return output;
     }
-    private static boolean isWhite(Color color) {
-        return color.getRed() >= 245 && color.getGreen() >= 245 && color.getBlue() >= 245;
+
+    /**
+     * Converts an image to grayscale.
+     * @param pixels the pixels of the image
+     */
+    public static void grayscale(Pixel[][] pixels)
+    {
+        // Loop through every pixel
+        for (int row = 0; row < pixels.length; row++)
+        {
+            for (int col = 0; col < pixels[row].length; col++)
+            {
+                Pixel pixel = pixels[row][col];
+
+                // Calculate the average of the RGB values
+                int average = (pixel.getRed() +
+                               pixel.getGreen() +
+                               pixel.getBlue()) / 3;
+
+                // Set all three colors to the same value
+                pixel.setColor(new Color(
+                    average, average, average));
+            }
+        }
     }
-    private static int clamp(int value) { return Math.max(0, Math.min(255, value)); }
-    private static void checkPixels(Pixel[][] pixels) {
-        if (pixels == null || pixels.length == 0 || pixels[0] == null || pixels[0].length == 0)
-            throw new IllegalArgumentException("Image must have at least one pixel");
+
+    /**
+     * Rotates an image using matrix multiplication.
+     * @param pixels the original image pixels
+     * @param angle the rotation angle in degrees
+     * @return the rotated image pixels
+     */
+    public static Pixel[][] rotate(Pixel[][] pixels, int angle)
+    {
+        // Get the original dimensions of the image
+        int height = pixels.length;
         int width = pixels[0].length;
-        for (Pixel[] row : pixels)
-            if (row == null || row.length != width)
-                throw new IllegalArgumentException("All image rows must have the same width");
-    }
-    private static Pixel[][] copyPixels(Pixel[][] source) {
-        checkPixels(source);
-        Pixel[][] result = new Picture(source.length, source[0].length).getPixels2D();
-        for (int r = 0; r < source.length; r++)
-            for (int c = 0; c < source[0].length; c++)
-                result[r][c].setColor(source[r][c].getColor());
-        return result;
-    }
-    /** Convert a Pixel array into a Picture for explore(), show(), or write(). */
-    public static Picture pictureFromPixels(Pixel[][] pixels) {
-        checkPixels(pixels);
-        Picture picture = new Picture(pixels.length, pixels[0].length);
-        Pixel[][] result = picture.getPixels2D();
-        for (int row = 0; row < pixels.length; row++) {
-            for (int col = 0; col < pixels[0].length; col++) {
-                result[row][col].setColor(pixels[row][col].getColor());
+
+        Picture rotatedImage;
+
+        // Swap the height and width for 90 degree rotations
+        if (angle == 90 || angle == -90)
+        {
+            rotatedImage = new Picture(width, height);
+        }
+
+        // Keep the same dimensions for a 180 degree rotation
+        else if (angle == 180)
+        {
+            rotatedImage = new Picture(height, width);
+        }
+
+        // Reject unsupported rotation angles
+        else
+        {
+            throw new IllegalArgumentException("Invalid rotation angle");
+        }
+
+        Pixel[][] rotatedPixels = rotatedImage.getPixels2D();
+
+        // Create the rotation matrix for the selected angle
+        Matrix2by2 matrix = new Matrix2by2(0, 0, 0, 0);
+        matrix.setRotationMatrix(angle);
+
+        // Loop through every original pixel
+        for (int row = 0; row < height; row++)
+        {
+            for (int col = 0; col < width; col++)
+            {
+                // Store the pixel coordinates in a vector
+                Vector1by2 position = new Vector1by2(row, col);
+
+                // Multiply the vector by the rotation matrix
+                Vector1by2 rotated = matrix.multiply(position);
+
+                // Get the new pixel coordinates
+                int newRow = rotated.getRow();
+                int newCol = rotated.getCol();
+
+                // Adjust coordinates to prevent negative indexes
+                if (angle == 180)
+                {
+                    newRow += height - 1;
+                    newCol += width - 1;
+                }
+                else if (angle == 90)
+                {
+                    newRow += width - 1;
+                }
+                else if (angle == -90)
+                {
+                    newCol += height - 1;
+                }
+
+                // Copy the original color to the rotated position
+                rotatedPixels[newRow][newCol].setColor(
+                    pixels[row][col].getColor());
             }
         }
-        return picture;
+
+        // Return the rotated pixel array
+        return rotatedPixels;
     }
-    /** Print and display one generated image. */
-    private static void display(String title, Pixel[][] pixels) {
-        System.out.println(title + " (" + pixels[0].length + " x " + pixels.length + ")");
-        pictureFromPixels(pixels).explore();
+
+    /**
+     * Inserts an entire small image onto a larger image.
+     * @param large the background image pixels
+     * @param small the small image pixels
+     * @param startRow the destination row
+     * @param startCol the destination column
+     */
+    public static void insert(Pixel[][] large, Pixel[][] small,
+                              int startRow, int startCol)
+    {
+        // Use the full height and width of the small image
+        insertPortion(large, small, startRow, startCol,
+                      small.length, small[0].length);
     }
-    private static int readInt(Scanner scanner, String prompt) {
-        while (true) {
-            System.out.print(prompt);
-            String line = scanner.nextLine().trim();
-            try { return Integer.parseInt(line); }
-            catch (NumberFormatException e) { System.out.println("Please enter an integer."); }
-        }
-    }
-    /** Interactive UI allows repeated transformations and inserts. */
-    public static void main(String[] args) {
-        try (Scanner scanner = new Scanner(System.in)) {
-            String backgroundFile = args.length > 0 ? args[0] : DEFAULT_BACKGROUND;
-            String overlayFile = args.length > 1 ? args[1] : DEFAULT_OVERLAY;
-            Pixel[][] current = new Picture(backgroundFile).getPixels2D();
-            Pixel[][] overlay = new Picture(overlayFile).getPixels2D();
-            System.out.println("Image App - original pixel color: " + current[0][0].getColor());
-            System.out.println("Background: " + backgroundFile + "; overlay: " + overlayFile);
-            while (true) {
-                System.out.println("\n1 Change color  2 Negative  3 Grayscale");
-                System.out.println("4 Rotate 180  5 Rotate 90 CCW  6 Rotate 90 CW");
-                System.out.println("7 Insert overlay  8 Insert without white  9 Blend overlay");
-                System.out.println("10 Recolor overlay and insert  11 Insert overlay portion");
-                System.out.println("12 View current  13 Reset background  0 Exit");
-                int choice = readInt(scanner, "Choose: ");
-                if (choice == 0) break;
-                int row, col;
-                switch (choice) {
-                    case 1:
-                        current = changeColor(current, readInt(scanner, "Red offset: "),
-                            readInt(scanner, "Green offset: "), readInt(scanner, "Blue offset: "));
-                        break;
-                    case 2: current = negativeColor(current); break;
-                    case 3: current = grayscale(current); break;
-                    case 4: current = rotate(current, 180); break;
-                    case 5: current = rotate(current, 90); break;
-                    case 6: current = rotate(current, -90); break;
-                    case 7: case 8: case 9: case 10: case 11:
-                        row = readInt(scanner, "Destination top row: ");
-                        col = readInt(scanner, "Destination left column: ");
-                        if (choice == 7) current = insert(current, overlay, row, col);
-                        else if (choice == 8) current = insertWithoutWhite(current, overlay, row, col);
-                        else if (choice == 9) current = insertBlended(current, overlay, row, col);
-                        else if (choice == 10) {
-                            Color color = new Color(clamp(readInt(scanner, "New red (0-255): ")),
-                                clamp(readInt(scanner, "New green (0-255): ")),
-                                clamp(readInt(scanner, "New blue (0-255): ")));
-                            current = insertWithoutWhite(current, recolorOverlay(overlay, color), row, col);
-                        } else {
-                            int fromRow = readInt(scanner, "Overlay start row: ");
-                            int fromCol = readInt(scanner, "Overlay start col: ");
-                            int h = readInt(scanner, "Portion height: ");
-                            int w = readInt(scanner, "Portion width: ");
-                            current = insertPortion(current, overlay, row, col,
-                                fromRow, fromCol, h, w, true, false);
-                        }
-                        break;
-                    case 12: display("Current image", current); continue;
-                    case 13: current = new Picture(backgroundFile).getPixels2D(); break;
-                    default: System.out.println("Unknown menu choice."); continue;
+
+    /**
+     * Inserts a portion of a small image without its white background.
+     * @param large the background image pixels
+     * @param small the small image pixels
+     * @param startRow the destination row
+     * @param startCol the destination column
+     * @param height the height of the inserted portion
+     * @param width the width of the inserted portion
+     */
+    public static void insertPortion(Pixel[][] large, Pixel[][] small,
+                                    int startRow, int startCol,
+                                    int height, int width)
+    {
+        // Loop through the selected portion of the small image
+        for (int row = 0; row < height && row < small.length; row++)
+        {
+            for (int col = 0; col < width && col < small[row].length; col++)
+            {
+                // Calculate the destination position
+                int newRow = row + startRow;
+                int newCol = col + startCol;
+
+                // Get the color of the small image pixel
+                Color color = small[row][col].getColor();
+
+                // Check that the pixel is inside the background
+                // and skip white pixels to remove the white background
+                if (newRow >= 0 && newRow < large.length &&
+                    newCol >= 0 && newCol < large[0].length &&
+                    !color.equals(Color.WHITE))
+                {
+                    // Copy the small image pixel onto the background
+                    large[newRow][newCol].setColor(color);
                 }
-                display("Updated image", current);
             }
         }
     }
